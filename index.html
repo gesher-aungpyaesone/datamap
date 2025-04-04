@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TopoJSON Map with Multiple Countries</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://unpkg.com/topojson-client@3.1.0/dist/topojson-client.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+        }
+
+        svg {
+            width: 100%;
+            height: 100vh;
+        }
+
+        .tooltip {
+            position: absolute;
+            background-color: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 5px;
+            border-radius: 3px;
+            pointer-events: none;
+            visibility: hidden;
+            font-size: 12px;
+        }
+
+        .controls {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            z-index: 10;
+            background-color: rgba(255, 255, 255, 0.8);
+            padding: 10px;
+            border-radius: 5px;
+        }
+
+        select {
+            font-size: 14px;
+            padding: 5px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="controls">
+        <label for="showBy">Show By:</label>
+        <select id="showBy">
+            <option value="world">World</option>
+            <option value="country">Country</option>
+        </select>
+
+        <label for="countrySelect" id="countryLabel" style="display: none;">Select Country:</label>
+        <select id="countrySelect" style="display: none;">
+            <option value="">--Select a country--</option>
+            <option value="mmr">Myanmar</option>
+            <option value="gbr">Great Britain</option>
+            <option value="vgb">Virgin Islands</option>
+            <!-- https://github.com/markmarkoh/datamaps/tree/master/dist -->
+            <!-- Add more countries as needed -->
+        </select>
+    </div>
+
+    <svg id="map"></svg>
+    <div class="tooltip" id="tooltip"></div>
+
+    <script>
+        const svg = d3.select("svg");
+        let width = svg.node().getBoundingClientRect().width;
+        let height = svg.node().getBoundingClientRect().height;
+
+        const tooltip = d3.select("#tooltip");
+        const countrySelect = d3.select("#countrySelect");
+        const showBySelect = d3.select("#showBy");
+        const countryLabel = d3.select("#countryLabel");
+
+        let currentMapGroup;
+
+        // Function to update the width and height of the SVG
+        function updateDimensions() {
+            width = svg.node().getBoundingClientRect().width;
+            height = svg.node().getBoundingClientRect().height;
+        }
+
+        // Event listener for window resize
+        window.addEventListener("resize", function () {
+            updateDimensions();
+            loadWorldMap({ code: "world", file: 'topojson/world.topojson.json' });
+        });
+
+        function clearMap() {
+            if (currentMapGroup) {
+                currentMapGroup.remove();
+            }
+        }
+
+        function loadWorldMap({ file, code }) {
+            clearMap();
+
+            d3.json(file).then(function (topoData) {
+                const geoData = topojson.feature(topoData, topoData.objects[code]);
+
+                const projection = d3.geoMercator().fitSize([width, height], geoData);
+                const path = d3.geoPath().projection(projection);
+
+                const mapGroup = svg.append("g")
+                    .attr("class", "datamap");
+
+                mapGroup.selectAll("path")
+                    .data(geoData.features)
+                    .enter().append("path")
+                    .attr("d", path)
+                    .attr("fill", "#ccc")
+                    .attr("stroke", "#333")
+                    .attr("stroke-width", 0.5);
+
+                mapGroup.selectAll("path")
+                    .on("mouseover", function (event, d) {
+                        d3.select(this).attr("fill", "#ff7f00");
+                        tooltip.style("visibility", "visible")
+                            .text(d.properties.name) // Assuming region name is stored in d.properties.name
+                            .style("left", (event.pageX + 10) + "px")
+                            .style("top", (event.pageY - 25) + "px");
+                    })
+                    .on("mousemove", function (event) {
+                        tooltip.style("left", (event.pageX + 10) + "px")
+                            .style("top", (event.pageY - 25) + "px");
+                    })
+                    .on("mouseout", function () {
+                        d3.select(this).attr("fill", "#ccc");
+                        tooltip.style("visibility", "hidden");
+                    });
+
+                currentMapGroup = mapGroup;
+            }).catch(function (error) {
+                console.error(`Error loading datamap:`, error);
+            });
+        }
+
+        // Event listeners for the "Show By" and "Country" selectors
+        showBySelect.on("change", function () {
+            const selectedOption = showBySelect.property("value");
+
+            if (selectedOption === "world") {
+                countryLabel.style("display", "none");
+                countrySelect.style("display", "none");
+                loadWorldMap({ code: "world", file: 'topojson/world.topojson.json' });
+            } else if (selectedOption === "country") {
+                countryLabel.style("display", "inline");
+                countrySelect.style("display", "inline");
+            }
+        });
+
+        countrySelect.on("change", function () {
+            const selectedCountry = countrySelect.property("value");
+
+            if (selectedCountry) {
+                loadWorldMap({
+                    file: `topojson/country/${selectedCountry}.topojson.json`, code: selectedCountry
+                });
+            }
+        });
+
+        // Initialize with the world map
+        loadWorldMap({ code: "world", file: 'topojson/world.topojson.json' });
+    </script>
+
+</body>
+
+</html>
